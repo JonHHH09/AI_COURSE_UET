@@ -1,0 +1,13 @@
+[project]
+name = "ai-course-uet"
+version = "0.1.0"
+description = "AI course (UET) seminar exercises"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "matplotlib>=3.11.2",
+    "mcp>=2.3.0",
+]
+
+[tool.uv]
+package = false
