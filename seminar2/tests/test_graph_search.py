@@ -1,8 +1,10 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 from seminar2.cities.graph import load_graph
 from seminar2.graph_search import Graph, bfs, dijkstra
-from seminar2.maze.maze import load_maze
+from seminar2.maze.maze import _read_config, _read_doors, load_maze
 
 # A-C direct costs 10, but A-B-C costs 3.
 WEIGHTED = {
@@ -84,6 +86,30 @@ class RealDataTests(unittest.TestCase):
         path, doors = maze_graph.shortest_path(1, 25)
         self.assertEqual(path, [1, 2, 3, 8, 13, 18, 17, 16, 21, 22, 23, 24, 25])
         self.assertEqual(doors, 12)
+
+
+class LoaderLineNumberTests(unittest.TestCase):
+    """csv skips blank lines, so error line numbers must come from the reader."""
+
+    def load(self, loader, text):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data.csv"
+            path.write_text(text, encoding="utf-8", newline="")
+            with self.assertRaises(ValueError) as cm:
+                loader(path)
+        return str(cm.exception)
+
+    def test_cities_error_names_the_real_line(self):
+        message = self.load(load_graph, "city_a,city_b,km\nA,B,5\n\n\nB,C,x\n")
+        self.assertIn("line 5", message)
+
+    def test_doors_error_names_the_real_line(self):
+        message = self.load(_read_doors, "room_a,room_b\n1,2\n\n3,x\n")
+        self.assertIn("line 4", message)
+
+    def test_config_error_names_the_real_line(self):
+        message = self.load(_read_config, "key,value\nrooms,25\n\nentrance,x\n")
+        self.assertIn("line 4", message)
 
 
 if __name__ == "__main__":

@@ -92,10 +92,16 @@ class _Handler(BaseHTTPRequestHandler):
                     _clients.remove(q)
 
 
+class _Server(ThreadingHTTPServer):
+    daemon_threads = True   # request threads must never keep the process alive
+    # HTTPServer sets SO_REUSEADDR, which on Windows lets a second listener bind a
+    # port that is already in use (instead of failing), so the busy-port check and
+    # the free-port fallback would never trigger. POSIX needs it for quick restarts.
+    allow_reuse_address = os.name != "nt"
+
+
 def _make_server(host, port):
-    server = ThreadingHTTPServer((host, port), _Handler)
-    server.daemon_threads = True   # request threads must never keep the process alive
-    return server
+    return _Server((host, port), _Handler)
 
 
 def start(host="127.0.0.1", port=None):

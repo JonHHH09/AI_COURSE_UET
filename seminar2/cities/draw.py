@@ -30,7 +30,7 @@ def draw(g, pos, out):
             ax.text(
                 (x1 + x2) / 2, (y1 + y2) / 2, f"{km} km",
                 ha="center", va="center", fontsize=10, color="#b00020",
-                bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none"),
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none"},
                 zorder=3,
             )
 
