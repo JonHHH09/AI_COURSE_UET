@@ -20,7 +20,7 @@ def main():
     url = hub.start(port=args.port)
     if url is None:
         raise SystemExit("could not start the viewer (port busy?)")
-    print(f"Live viewer: {url}  (Ctrl-C to stop)")
+    print(f"Live viewer: {url}  (Ctrl-C to stop)", flush=True)   # stdout may be a pipe or log file
     if not args.no_browser:
         webbrowser.open(url)
 

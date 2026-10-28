@@ -13,6 +13,7 @@ from seminar2 import animation
 from seminar2.graph_search import Graph
 from seminar2.layout import maze_position
 from seminar2.maze.maze import grid_width, load_maze
+from seminar2.text import printable
 
 OUT = Path(__file__).resolve().parent.parent / "images" / "maze" / "path.gif"
 
@@ -58,7 +59,7 @@ def main(argv=None):
         print(f"error: {exc}", file=sys.stderr)
         return 2
     path, doors = Graph(maze.adjacency, weighted=False).shortest_path(start, goal)
-    print(f"{' → '.join(map(str, path))}: {doors} doors" if path else f"no path from {start} to {goal}")
+    print(printable(f"{' → '.join(map(str, path))}: {doors} doors" if path else f"no path from {start} to {goal}"))
     scene = make_scene(maze, start, goal)
     if args.show:
         animation.show(scene, args.fps)

@@ -2,11 +2,21 @@ import json
 import unittest
 
 from seminar2.cities.graph import load_graph
-from seminar2.graph_search import Graph, bfs, bfs_steps, build_steps, dijkstra, dijkstra_steps
+from seminar2.graph_search import (
+    Graph,
+    bfs,
+    bfs_steps,
+    build_steps,
+    dijkstra,
+    dijkstra_steps,
+)
 from seminar2.layout import CITY_POS, maze_position
 from seminar2.maze.maze import load_maze
 from seminar2.tests.test_graph_search import (
-    UNWEIGHTED, WEIGHTED, unweighted_edges, weighted_edges,
+    UNWEIGHTED,
+    WEIGHTED,
+    unweighted_edges,
+    weighted_edges,
 )
 
 # B is reached first via A (cost 5), then cheaper via C (cost 2+1); the old
