@@ -15,17 +15,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from mcp.server.mcpserver import MCPServer
 
-from seminar2.cities.graph import load_graph
+from seminar2.cities.graph import load_graph, load_roads
 from seminar2.graph_search import Graph
 from seminar2.live import hub
 from seminar2.live.session import city_session, maze_session
 from seminar2.maze.maze import load_maze
+from seminar2.cities.quality import best_quality_route as _quality_route, cost_adjacency
 from seminar2.text import fold
 
 mcp = MCPServer("seminar2")
 
 # Datasets are read once at startup from seminar2/dataset/*.csv.
 graph = load_graph()
+roads = load_roads()
 _maze = load_maze()
 maze, DOORS, ENTRANCE, EXIT = _maze.adjacency, _maze.doors, _maze.entrance, _maze.exit
 city_graph = Graph(graph, weighted=True)
@@ -95,6 +97,26 @@ def shortest_route(from_city: str, to_city: str) -> dict:
     else:
         path, km = city_graph.shortest_path(a, b)
     return {"from": a, "to": b, "route": path, "total_km": km}
+
+
+@mcp.tool()
+def best_quality_route(from_city: str, to_city: str) -> dict:
+    """Best route by quality-weighted cost (km × quality factor)."""
+    a, b = _match_city(from_city), _match_city(to_city)
+    if a is None or b is None:
+        bad = from_city if a is None else to_city
+        return {"error": f"unknown city '{bad}'", "cities": sorted(graph)}
+    if hub.url():
+        session = city_session(cost_adjacency(graph, roads), a, b, "best_quality_route", unit="cost")
+        hub.publish(session)
+        result = _quality_route(graph, roads, a, b)
+    else:
+        result = _quality_route(graph, roads, a, b)
+    if result is None:
+        return {"error": f"no route from {a} to {b}"}
+    return {"from": a, "to": b, "route": result["route"], "total_km": result["total_km"],
+            "quality_cost": result["quality_cost"], "legs": result["legs"],
+            "worst_road": result["worst_road"]}
 
 
 @mcp.tool()
