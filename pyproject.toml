@@ -7,7 +7,17 @@ requires-python = ">=3.14"
 dependencies = [
     "matplotlib>=3.11.2",
     "mcp>=2.3.0",
+    "rich>=15.0.0",
+    "textual>=8.2.8",
 ]
 
 [tool.uv]
 package = false
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W", "I", "B", "UP"]
+ignore = ["E731"]  # lambdas in the TUI action registry are intentional
+

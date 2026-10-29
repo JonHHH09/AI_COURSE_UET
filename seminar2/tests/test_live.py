@@ -2,10 +2,14 @@ import http.client
 import json
 import os
 import socket
+import subprocess
+import sys
+import threading
 import time
 import unittest
 import urllib.error
 import urllib.request
+from pathlib import Path
 from unittest import mock
 
 from seminar2.cities.graph import load_graph
@@ -150,6 +154,13 @@ class HubTests(unittest.TestCase):
             self.assertIsNone(hub.start(port=port))
         hub.start(port=0)
 
+    def test_second_hub_cannot_share_a_running_hubs_port(self):
+        # On Windows SO_REUSEADDR lets two listeners share a port, so the busy-port
+        # fallback never fired when another seminar2 server already held 8765.
+        port = int(self.url.rsplit(":", 1)[1].strip("/"))
+        with self.assertRaises(OSError):
+            hub._make_server("127.0.0.1", port).server_close()
+
     def test_slow_client_is_dropped(self):
         full = hub.queue.Queue(maxsize=2)
         with hub._lock:
@@ -188,6 +199,23 @@ class PortFallbackTests(unittest.TestCase):
 
     def test_busy_explicit_port_returns_none(self):
         self.assertIsNone(hub.start(port=self.port))
+
+
+class StandaloneTests(unittest.TestCase):
+    def test_url_line_is_flushed_when_stdout_is_a_pipe(self):
+        # a block-buffered pipe or log file would otherwise never show the URL
+        env = {k: v for k, v in os.environ.items() if k != "PYTHONUNBUFFERED"}
+        proc = subprocess.Popen([sys.executable, "-m", "seminar2.live", "--no-browser", "--port", "0"],
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env,
+                                cwd=Path(__file__).resolve().parents[2], text=True, encoding="utf-8")
+        self.addCleanup(proc.stdout.close)
+        self.addCleanup(proc.wait)
+        self.addCleanup(proc.kill)
+        line = []
+        reader = threading.Thread(target=lambda: line.append(proc.stdout.readline()), daemon=True)
+        reader.start()
+        reader.join(15)
+        self.assertTrue(line and line[0].startswith("Live viewer: http://127.0.0.1:"), line)
 
 
 if __name__ == "__main__":

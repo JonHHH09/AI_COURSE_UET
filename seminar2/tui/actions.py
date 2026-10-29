@@ -1,4 +1,4 @@
-"""UI-free action registry for the terminal UI (no curses imports here).
+"""UI-free action registry for the terminal UI (no Textual imports here).
 
 Every feature of the project is an `Action`: a key, a group, a title, a
 description, a list of `Option`s (what the form asks for) and a `run(values)`
@@ -23,9 +23,10 @@ import tempfile
 import threading
 import time
 import webbrowser
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from seminar2 import mcp_server as srv
 from seminar2.live import hub
@@ -69,6 +70,9 @@ class Result:
     text: str
     ok: bool = True
     data: Any = None
+    summary: str = ""     # one-line digest of a route/path result (shown above the JSON)
+    head: str = ""        # tool results: everything before the JSON (numbered lists, error + choices)
+    json: str = ""        # tool results: the JSON part, for syntax highlighting; "" = nothing to highlight
 
 
 @dataclass
@@ -86,7 +90,7 @@ class Action:
     title: str
     description: str
     options: tuple
-    run: Callable[[dict], "Result | Spawn"]
+    run: Callable[[dict], Result | Spawn]
 
 
 def _safe(fn):
@@ -164,11 +168,25 @@ def _fps(value):
 
 # --- MCP tool actions -----------------------------------------------------------
 
-def format_tool_result(data):
-    """Numbered build/steps lists (trace tools) followed by the rest as JSON."""
-    if not isinstance(data, dict):
-        return json.dumps(data, ensure_ascii=False, indent=2)
-    rest, parts = dict(data), []
+def summarize(data):
+    """One line for route/path results, e.g. 'A → B → C · 267 km' or '1 → 2 → … → 25 · 12 doors'; else ''."""
+    if not isinstance(data, dict) or "error" in data:
+        return ""
+    if isinstance(data.get("route"), list) and "total_km" in data:
+        route = data["route"]
+        return f"{' → '.join(map(str, route))} · {data['total_km']} km" if route else "no route"
+    if isinstance(data.get("path"), list) or ("path" in data and "doors_passed" in data):
+        path = data["path"] or []
+        if not path:
+            return "no path"
+        shown = path if len(path) <= 8 else [*path[:3], "…", *path[-2:]]
+        return f"{' → '.join(map(str, shown))} · {data['doors_passed']} doors"
+    return ""
+
+
+def _numbered(rest):
+    """Pop the build/steps lists (trace tools) out of `rest`; returns the numbered text lines."""
+    parts = []
     for key, title in (("build", "Build the graph"), ("steps", "Search steps")):
         items = rest.get(key)
         if isinstance(items, list):
@@ -177,10 +195,36 @@ def format_tool_result(data):
             parts += [f"{i:>4}. {m if isinstance(m, str) else json.dumps(m, ensure_ascii=False)}"
                       for i, m in enumerate(items, 1)]
             parts.append("")
+    return parts
+
+
+def format_tool_result(data):
+    """Numbered build/steps lists (trace tools) followed by the rest as JSON."""
+    if not isinstance(data, dict):
+        return json.dumps(data, ensure_ascii=False, indent=2)
+    rest = dict(data)
+    parts = _numbered(rest)
     if "error" in rest:
         parts.append(f"error: {rest['error']}")
     parts.append(json.dumps(rest, ensure_ascii=False, indent=2))
     return "\n".join(parts)
+
+
+def tool_parts(data):
+    """(head, json) for display: text before the JSON, and the JSON to highlight ('' for error results).
+
+    An error result becomes `error: ...` plus the valid choices (when the tool lists them) and no JSON.
+    """
+    if not isinstance(data, dict):
+        return "", json.dumps(data, ensure_ascii=False, indent=2)
+    rest = dict(data)
+    parts = _numbered(rest)
+    if "error" in rest:
+        parts.append(f"error: {rest['error']}")
+        if isinstance(rest.get("cities"), list):
+            parts.append("valid choices: " + ", ".join(map(str, rest["cities"])))
+        return "\n".join(parts), ""
+    return "\n".join(parts).rstrip("\n"), json.dumps(rest, ensure_ascii=False, indent=2)
 
 
 def _tool_option(param):
@@ -218,7 +262,8 @@ def _tool_action(name, fn, doc):
                 kwargs[opt.name] = v
         data = fn(**kwargs)
         ok = not (isinstance(data, dict) and "error" in data)
-        return Result(format_tool_result(data), ok, data)
+        head, body = tool_parts(data)
+        return Result(format_tool_result(data), ok, data, summarize(data), head, body)
 
     paragraphs = [" ".join(p.split()) for p in (doc or name).split("\n\n")]
     return Action(name, G_MCP, name, "\n\n".join(paragraphs), options, run)
@@ -256,7 +301,7 @@ def _start_viewer(values):
         lines.append(f"Live viewer already running: {url}")
     else:
         err = io.StringIO()
-        with contextlib.redirect_stderr(err):     # hub logs to stderr; keep curses clean
+        with contextlib.redirect_stderr(err):     # hub logs to stderr; keep the screen clean
             url = hub.start(port=values.get("port"))
         if url is None:
             return Result(f"Could not start the live viewer (port busy or invalid?)\n{err.getvalue().strip()}", False)
@@ -357,6 +402,8 @@ def _processes(values):
 
 MAX_LINES = 5000
 GRACE = 2.0      # seconds between SIGTERM and SIGKILL
+TASKKILL_TIMEOUT = 10      # seconds before a hung `taskkill` is abandoned
+WINDOWS = sys.platform == "win32"
 
 
 class CaptureJob:
@@ -398,7 +445,7 @@ class CaptureJob:
             with subprocess.Popen(
                     self.spec.argv, cwd=self.spec.cwd, env=env, stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                    encoding="utf-8", errors="replace", start_new_session=True) as proc:
+                    encoding="utf-8", errors="replace", **_group_kwargs()) as proc:
                 self._proc = proc
                 if self.cancelled:      # cancel() ran before the process existed
                     _terminate(proc, self._grace)
@@ -447,10 +494,37 @@ def truncation_note(dropped):
     return f"[output truncated: the first {dropped} lines were dropped]"
 
 
+def _group_kwargs():
+    """Popen kwargs that put the child in its own process group (so the whole tree can be stopped)."""
+    if WINDOWS:
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def _taskkill(proc):
+    """Windows: force-kill the process and its children (`taskkill /T`); plain kill() if that fails."""
+    try:
+        done = subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True,
+                              stdin=subprocess.DEVNULL, timeout=TASKKILL_TIMEOUT, check=False)
+        if done.returncode == 0:
+            return
+    except (OSError, subprocess.SubprocessError):
+        pass
+    with contextlib.suppress(OSError):
+        proc.kill()
+
+
 def _sigterm(proc):
-    """SIGTERM the group of a still-running process; False if it had already exited (never signal a reaped pid)."""
+    """Ask a still-running process (group) to stop; False if it had already exited (never signal a reaped pid).
+
+    POSIX: SIGTERM to the group. Windows has no graceful group signal for console children,
+    so the whole tree is killed right away.
+    """
     if proc is None or proc.poll() is not None:
         return False
+    if WINDOWS:
+        _taskkill(proc)
+        return True
     try:
         os.killpg(proc.pid, signal.SIGTERM)
     except (ProcessLookupError, PermissionError):
@@ -459,19 +533,45 @@ def _sigterm(proc):
 
 
 def _sigkill(proc, grace):
-    """Unconditional SIGKILL of the group (grandchildren such as npx -> node may outlive the leader), then reap."""
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        pass
+    """Force-kill the group (grandchildren such as npx -> node may outlive the leader), then reap."""
+    if WINDOWS:
+        if proc.poll() is None:     # the tree is only reachable through a live leader
+            _taskkill(proc)
+    else:
+        # Also runs after the leader was reaped, on purpose: surviving grandchildren keep the group alive.
+        # An empty group just gives ESRCH; the pid-reuse window is tiny (we signalled it moments ago).
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
     try:
         proc.wait(grace)
     except subprocess.TimeoutExpired:
         pass
 
 
+def _concurrently(fn, items, timeout):
+    """Run fn(item) for every item on its own thread; join them all on one shared deadline.
+
+    Returns {index: result} for the calls that finished in time (a slow call is left running).
+    """
+    results = {}
+
+    def call(i, item):
+        results[i] = fn(item)
+
+    threads = [threading.Thread(target=call, args=(i, item), name="tui-signal", daemon=True)
+               for i, item in enumerate(items)]
+    for t in threads:
+        t.start()
+    deadline = time.monotonic() + timeout
+    for t in threads:
+        t.join(max(deadline - time.monotonic(), 0))
+    return results
+
+
 def _terminate(proc, grace=GRACE):
-    """SIGTERM the process group, wait `grace`, then SIGKILL the group.
+    """SIGTERM the process group, wait `grace`, then SIGKILL the group (Windows: kill the tree).
 
     Does nothing when the process had already exited (its pid may be reused).
     """
@@ -491,6 +591,7 @@ class ProcessManager:
         self._dir = None
         self.detached = []     # (title, Popen, log path)
         self.jobs = []
+        self.viewer_owned = False     # the live viewer that is running now was started by an action run here
 
     def _log_path(self, title):
         if self._dir is None:
@@ -503,7 +604,7 @@ class ProcessManager:
         try:
             with open(log, "wb") as fh:
                 proc = subprocess.Popen(spec.argv, cwd=spec.cwd, stdin=subprocess.DEVNULL, stdout=fh,
-                                        stderr=subprocess.STDOUT, start_new_session=True)
+                                        stderr=subprocess.STDOUT, **_group_kwargs())
         except OSError as exc:
             return Result(f"could not start {spec.argv[0]}: {exc}", False)
         self.detached.append((spec.title, proc, log))
@@ -518,7 +619,7 @@ class ProcessManager:
         return job
 
     def running(self):
-        return [(t, p, l) for t, p, l in self.detached if p.poll() is None]
+        return [(t, p, log) for t, p, log in self.detached if p.poll() is None]
 
     def describe(self):
         if not self.detached:
@@ -544,7 +645,9 @@ class ProcessManager:
         are daemon threads and would otherwise die with the interpreter).
         """
         stopped = []
-        live = [(t, p) for t, p, _ in self.detached if _sigterm(p)]
+        # Windows runs one taskkill subprocess per process: do them concurrently so the grace periods overlap.
+        signalled = _concurrently(_sigterm, [p for _, p, _ in self.detached], TASKKILL_TIMEOUT + 1)
+        live = [(t, p) for i, (t, p, _) in enumerate(self.detached) if signalled.get(i)]
         stopped += [t for t, _ in live]
         pending = [j for j in self.jobs if not j.done]
         for job in pending:
@@ -557,12 +660,15 @@ class ProcessManager:
             # cancelled before Popen: the job thread kills the child itself
             job._thread.join(max(deadline - time.monotonic(), 0))
         end = time.monotonic() + grace
-        for _, proc in live:
+
+        def finish(proc):
             try:
                 proc.wait(max(end - time.monotonic(), 0))
             except subprocess.TimeoutExpired:
                 pass
             _sigkill(proc, grace)
+
+        _concurrently(finish, [p for _, p in live], 2 * grace + TASKKILL_TIMEOUT + 1)
         self.remove_logs()
         return stopped
 
@@ -584,7 +690,13 @@ def execute(action, raw, manager=None):
     values, errors = coerce(action.options, raw)
     if errors:
         return Result("\n".join(errors), False)
+    viewer_before = hub.url()
     out = action.run(values)
+    viewer_now = hub.url()
+    if viewer_now is None:          # per start, not a snapshot: a viewer restarted from here is ours again
+        manager.viewer_owned = False
+    elif viewer_before is None:
+        manager.viewer_owned = True
     if isinstance(out, Spawn):
         return manager.start_capture(out) if out.mode == "capture" else manager.spawn_detached(out)
     return out
@@ -595,11 +707,11 @@ def execute(action, raw, manager=None):
 @functools.cache
 def registry():
     cities, n_rooms = tuple(srv.graph), len(srv.maze)
-    city = lambda name, label, default: Option(name, label, "choice", cities,   # noqa: E731
+    city = lambda name, label, default: Option(name, label, "choice", cities,
                                                 default if default in cities else cities[0], True)
-    room = lambda name, label, default: Option(name, label, "int", default=default, required=True,   # noqa: E731
+    room = lambda name, label, default: Option(name, label, "int", default=default, required=True,
                                                 min=1, max=n_rooms)
-    fps = lambda default: Option("fps", "Frames per second", "int", default=default, required=True,   # noqa: E731
+    fps = lambda default: Option("fps", "Frames per second", "int", default=default, required=True,
                                  min=1, max=60)
     show = Option("show", "Show a window (instead of saving)", "bool", default=False)
     out = Option("out", "Output GIF path (blank = default)", "text")

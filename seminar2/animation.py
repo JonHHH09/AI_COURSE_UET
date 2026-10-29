@@ -17,7 +17,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 from seminar2.graph_search import Graph
-from seminar2.text import fold, plural
+from seminar2.text import plural
 
 INF = "∞"
 HOLD_SECONDS = 2.5
@@ -145,9 +145,9 @@ def _table_lines(scene, frame):
         dist = INF if d is None else str(d)
         parent = "–" if p is None else str(p)
         if scene.weighted:
-            cells.append(f"{str(node):<8}{dist:>5}  ← {parent}")
+            cells.append(f"{node!s:<8}{dist:>5}  ← {parent}")
         else:
-            cells.append(f"{str(node):>2} {dist:>2} ←{parent:>2}")
+            cells.append(f"{node!s:>2} {dist:>2} ←{parent:>2}")
     ncols = 1 if len(order) <= 10 else 3
     rows = -(-len(cells) // ncols)
     gap = "   "
@@ -172,7 +172,7 @@ def _draw_graph(ax, scene, frame):
 
     path_edges = set()
     if frame["path"]:
-        path_edges = {_edge_key(a, b) for a, b in zip(frame["path"], frame["path"][1:])}
+        path_edges = {_edge_key(a, b) for a, b in zip(frame["path"], frame["path"][1:], strict=False)}
     hl = frame["highlight"]
     hl_key = _edge_key(hl[0], hl[1]) if hl else None
 
@@ -190,7 +190,7 @@ def _draw_graph(ax, scene, frame):
         if scene.weighted:
             ax.text((x1 + x2) / 2, (y1 + y2) / 2, f"{cost} km", ha="center", va="center",
                     fontsize=9, color=LABEL_COLOR, zorder=3,
-                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none"))
+                    bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none"})
 
     for node in frame["nodes"]:
         x, y = scene.pos[node]
@@ -299,6 +299,6 @@ def save_gif(scene, out, fps=3, dpi=80):
 
 
 def show(scene, fps=3):
-    fig, anim = make_animation(scene, fps, dpi=100)
+    _fig, anim = make_animation(scene, fps, dpi=100)
     plt.show()
     return anim  # `anim` stays referenced until the window closes

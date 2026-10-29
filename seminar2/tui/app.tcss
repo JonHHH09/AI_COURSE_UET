@@ -1,0 +1,131 @@
+Screen {
+    background: $background;
+}
+
+#body {
+    height: 1fr;
+}
+
+#sidebar {
+    width: 36;
+    border: round $primary 60%;
+    border-title-color: $accent;
+}
+
+#filter {
+    margin: 0;
+}
+
+#actions {
+    height: 1fr;
+    background: $background;
+    border: none;
+    padding: 0;
+}
+
+#actions > .option-list--option-disabled {
+    color: $accent;
+    text-style: bold;
+}
+
+#main {
+    width: 1fr;
+    padding: 0 1;
+}
+
+#detail {
+    height: auto;
+    max-height: 60%;
+}
+
+#title {
+    color: $accent;
+    margin-top: 1;
+}
+
+#desc {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#form-host {
+    height: auto;
+}
+
+ActionForm {
+    height: auto;
+}
+
+.muted {
+    color: $text-muted;
+}
+
+.field-label {
+    margin-top: 1;
+}
+
+.field-error {
+    color: $error;
+    text-style: bold;
+}
+
+ActionForm Input, ActionForm Select {
+    max-width: 60;
+}
+
+#run {
+    margin: 1 0;
+}
+
+#output-box {
+    height: 1fr;
+    min-height: 6;
+    border: round $primary 60%;
+    border-title-color: $accent;
+}
+
+#runstatus {
+    height: 1;
+    padding: 0 1;
+    background: $panel;
+}
+
+#output {
+    height: 1fr;
+    background: $background;
+}
+
+#statusbar {
+    height: 1;
+    background: $panel;
+    color: $text-muted;
+}
+
+HelpScreen {
+    align: center middle;
+    background: #000000 70%;
+}
+
+#help {
+    width: 80;
+    max-width: 96%;
+    height: auto;
+    max-height: 96%;
+    overflow-y: auto;
+    padding: 1 2;
+    border: round $accent;
+    background: $background;
+}
+
+#help-title {
+    color: $accent;
+    margin-bottom: 1;
+}
+
+#help-note {
+    margin-top: 1;
+}
+
+#help-note2 {
+    color: $text-muted;
+}

@@ -32,13 +32,13 @@ def load_graph(path=DEFAULT_PATH):
         missing = {"city_a", "city_b", "km"} - set(reader.fieldnames or [])
         if missing:
             raise ValueError(f"{path}: missing column(s) {sorted(missing)}")
-        rows = list(reader)
+        rows = [(reader.line_num, row) for row in reader]   # csv skips blank lines, so enumerate would drift
     if not rows:
         raise ValueError(f"{path}: no roads found")
 
     g = {}
     seen = set()
-    for line, row in enumerate(rows, start=2):
+    for line, row in rows:
         if _is_blank(row):
             continue
         a, b, raw_km = (row["city_a"] or "").strip(), (row["city_b"] or "").strip(), row["km"]

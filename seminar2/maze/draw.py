@@ -45,11 +45,11 @@ def draw(doors, out):
     ex, ey = position(ENTRANCE)
     ax.annotate("Entrance", (ex, ey), (ex - 0.9, ey + 0.6), ha="center",
                 color="#2ca02c", fontsize=11, fontweight="bold",
-                arrowprops=dict(arrowstyle="->", color="#2ca02c", lw=2, shrinkB=22))
+                arrowprops={"arrowstyle": "->", "color": "#2ca02c", "lw": 2, "shrinkB": 22})
     xx, xy = position(EXIT)
     ax.annotate("Exit", (xx, xy), (xx + 0.9, xy - 0.6), ha="center",
                 color="#d62728", fontsize=11, fontweight="bold",
-                arrowprops=dict(arrowstyle="->", color="#d62728", lw=2, shrinkB=22))
+                arrowprops={"arrowstyle": "->", "color": "#d62728", "lw": 2, "shrinkB": 22})
 
     ax.set_title(f"Maze graph: {N_ROOMS} rooms, {len(doors)} doors")
     ax.set_aspect("equal")

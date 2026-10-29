@@ -1,8 +1,11 @@
 """Tests for the step-by-step animation helper (Agg backend, no windows)."""
 
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 import matplotlib
 
@@ -108,6 +111,16 @@ class HelpersTest(unittest.TestCase):
     def test_cli_errors_exit_non_zero(self):
         self.assertNotEqual(cities_animate.main(["--from", "Paris"]), 0)
         self.assertNotEqual(maze_animate.main(["--to", "99"]), 0)
+
+    def test_cli_summary_prints_on_a_cp1252_stdout(self):
+        # piped stdout on Windows is cp1252, which cannot encode the arrow
+        for module, argv in ((cities_animate, []), (maze_animate, [])):
+            raw = io.BytesIO()
+            out = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
+            with mock.patch.object(animation, "save_gif", return_value=0), redirect_stdout(out):
+                self.assertEqual(module.main(argv), 0)
+            out.flush()
+            self.assertIn("->", raw.getvalue().decode("cp1252"))
 
 
 class GifTest(unittest.TestCase):

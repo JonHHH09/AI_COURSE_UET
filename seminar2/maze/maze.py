@@ -137,7 +137,8 @@ def _read_config(path):
         if missing:
             raise ValueError(f"{path}: missing column(s) {sorted(missing)}")
         config = {}
-        for line, row in enumerate(reader, start=2):
+        for row in reader:
+            line = reader.line_num   # csv skips blank lines, so enumerate would drift
             if _is_blank(row):
                 continue
             key = (row["key"] or "").strip()
@@ -160,7 +161,8 @@ def _read_doors(path):
         if missing:
             raise ValueError(f"{path}: missing column(s) {sorted(missing)}")
         doors = []
-        for line, row in enumerate(reader, start=2):
+        for row in reader:
+            line = reader.line_num   # csv skips blank lines, so enumerate would drift
             if _is_blank(row):
                 continue
             if None in row or row["room_b"] is None:

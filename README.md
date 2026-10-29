@@ -1,33 +1,64 @@
 # AI_COURSE_UET
 
-Seminar 2 exercises for the AI course (UET). Two graph problems that share one search module and are exposed through an MCP server:
+[![CI](https://github.com/JonHHH09/AI_COURSE_UET/actions/workflows/ci.yml/badge.svg)](https://github.com/JonHHH09/AI_COURSE_UET/actions/workflows/ci.yml)
 
-- **U1, cities:** 8 Albanian cities, weighted undirected graph (driving km). Shortest route by Dijkstra.
-- **U2, maze:** 25 rooms on a 5x5 grid, unweighted undirected graph. Fewest-doors path by BFS.
+Seminar 2 exercises for the AI course (UET). Two graph problems, a shortest route between Albanian cities and a way out of a maze, solved with one small search module. The results are available as a terminal UI, command-line scripts, an MCP server and a live web viewer that animates each search.
 
-## Layout
+## Seminar 2 at a glance
 
-- `seminar2/cities/` – U1: intercity graph (`graph.py`, `draw.py`, `arsyetimi.md`)
-- `seminar2/maze/` – U2: 25-room maze (`maze.py`, `draw.py`, `arsyetimi.md`)
-- `seminar2/images/` – generated figures, one subdir per problem: `cities/graph.png`, `maze/maze.png`
-- `seminar2/dataset/` – the data as CSV: `cities.csv` (roads and km), `maze_doors.csv` (doors), `maze_config.csv` (rooms, entrance, exit)
-- `seminar2/graph_search.py` – shared Dijkstra/BFS and `Graph` class used by cities and maze
-- `seminar2/mcp_server.py` – MCP server (stdio) exposing both problems, plus the live viewer
-- `seminar2/live/` – live web viewer that animates each search as it runs
-- `seminar2/layout.py` – node positions shared by the drawings, animations and viewer
-- `seminar2/animation.py` – shared matplotlib frame code for the animations
-- `seminar2/tui/` – terminal UI that lists and runs every feature
-- `seminar2/tests/` – unit tests
+| | U1: cities | U2: maze |
+|---|---|---|
+| Data | `seminar2/dataset/cities.csv` | `maze_doors.csv`, `maze_config.csv` |
+| Graph | 8 cities, 9 roads, weighted, undirected (km) | 25 rooms (5x5), 31 doors, unweighted, undirected |
+| Question | Shortest route by total km | Path with the fewest doors, room 1 to room 25 |
+| Algorithm | Dijkstra | BFS |
+| Why | Roads have different lengths, so the nearest unsettled city is expanded first | Every door costs the same, so the first time BFS reaches a room is already the shortest way |
+| Result | Shkodër → Lezhë → Tirana → Elbasan → Korçë, **267 km** | 1 → 2 → 3 → 8 → 13 → 18 → 17 → 16 → 21 → 22 → 23 → 24 → 25, **12 doors** |
 
-## Setup
+| Cities graph | Route animation |
+|---|---|
+| <img src="seminar2/images/cities/graph.png" width="360" alt="City graph"> | <img src="seminar2/images/cities/route.gif" width="360" alt="Route animation"> |
+
+| Maze | Path animation |
+|---|---|
+| <img src="seminar2/images/maze/maze.png" width="360" alt="Maze"> | <img src="seminar2/images/maze/path.gif" width="360" alt="Path animation"> |
+
+## How it works
+
+- The data lives in CSV files in `seminar2/dataset/`.
+- The loaders (`seminar2/cities/graph.py`, `seminar2/maze/maze.py`) validate it and raise `ValueError` with the file and line number. They never return partial data.
+- `seminar2/graph_search.py` holds `Graph` and the search algorithms. `dijkstra_steps` and `bfs_steps` are generators that yield one dict per step (frontier, visited, distances, predecessors). `dijkstra` and `bfs` just consume them, so a trace and a result cannot disagree.
+- Dijkstra uses a priority queue ordered by distance. BFS uses a FIFO queue, and neighbours are sorted so the path is the same on every run.
+- The consumers all read the same steps: the plain results, the MCP trace tools, the matplotlib animations and the live viewer.
+- The written reasoning for each problem is in [`seminar2/cities/arsyetimi.md`](seminar2/cities/arsyetimi.md) and [`seminar2/maze/arsyetimi.md`](seminar2/maze/arsyetimi.md) (Albanian).
+
+## Quick start
 
 Requires Python 3.14+ and [uv](https://docs.astral.sh/uv/).
 
 ```
 uv sync
+uv run python -m seminar2.tui
 ```
 
-## Run (from the repo root)
+## Terminal UI
+
+A [Textual](https://textual.textualize.io/) app that works on Windows, Linux and macOS, and the mouse works too. The left side is the action list with a filter box, the right side is the options form, a Run button and the output, and the status bar shows the live viewer URL and any background processes. The default theme is `matrix` (green on black).
+
+- `↑`/`↓` select an action
+- `Enter` opens its form (runs at once if it has no options); `Enter` in a field runs
+- `Tab` / `Shift+Tab` move between fields
+- `Ctrl+R` runs from anywhere
+- `Esc` cancels a running job, or goes back to the list
+- `/` filters the list, `Ctrl+L` clears the output, `?` help (`F1` also works while typing in a field)
+- `Ctrl+P` command palette (themes)
+- `q` quits (not while typing in a field), `Ctrl+Q` / `Ctrl+C` quit anywhere
+
+Background processes (the live viewer, for example) are stopped on exit.
+
+## Command line
+
+Run from the repo root, with `-m` for modules:
 
 ```
 uv run python -m seminar2.cities.draw   # writes seminar2/images/cities/graph.png
@@ -36,38 +67,15 @@ uv run python -m seminar2.cities.animate  # writes seminar2/images/cities/route.
 uv run python -m seminar2.maze.animate    # writes seminar2/images/maze/path.gif (--from, --to, --show, --out, --fps)
 uv run python -m seminar2.live          # live viewer at http://127.0.0.1:8765 with demo searches
 uv run python seminar2/mcp_server.py    # MCP server over stdio, plus the live viewer
-uv run python -m seminar2.cities.graph  # print the city graph (use -m, not the file path)
-uv run python -m seminar2.maze.maze     # print the maze
+uv run python -m seminar2.cities.graph  # print the city graph and checks
+uv run python -m seminar2.maze.maze     # print the maze and validation result
 ```
 
-`--show` opens a live matplotlib window instead of saving a GIF.
-
-## Terminal UI
-
-```
-uv run python -m seminar2.tui
-```
-
-Lists everything above in one menu and runs it with options: the 9 MCP tools (called directly, with city/room pickers), the live viewer (start it here and searches run from the TUI play in the browser), the animations, figures and data checks, tests, the Hermes check and the MCP Inspector. Keys: ↑/↓ move, Enter opens the options form, Enter runs, Esc goes back or cancels a running job, `/` filters, `?` help, `q` quits (background processes are stopped).
-
-## Live viewer
-
-Each route or path search made through the MCP server appears in the viewer at http://127.0.0.1:8765 and plays automatically: first the graph is built edge by edge, then the search runs (frontier, distance table, final path).
-
-- Port: `SEMINAR2_LIVE_PORT` (default 8765).
-- Off: `SEMINAR2_LIVE=0`.
-- If the default port is busy, the viewer picks a free port (ask the `live_viewer` tool for the URL). A busy port set through `SEMINAR2_LIVE_PORT` disables the viewer; the server keeps working.
-- `uv run python -m seminar2.live --port N --no-browser` runs it on its own, without MCP.
-
-## Test
-
-```
-uv run python -m unittest discover -s seminar2/tests -t .
-```
+`--show` opens a matplotlib window instead of saving a GIF.
 
 ## MCP server
 
-Started over stdio. The data is read from `seminar2/dataset/` once at startup, so restart the server after editing the CSVs.
+Runs over stdio. The data is read once at startup, so restart the server after editing the CSVs.
 
 | Tool | Problem | Purpose |
 |---|---|---|
@@ -81,9 +89,25 @@ Started over stdio. The data is read from `seminar2/dataset/` once at startup, s
 | `trace_maze(from_room=1, to_room=25, detail=False)` | maze | Same path plus a step-by-step explanation; `detail=True` returns the raw events |
 | `live_viewer()` | both | URL of the live viewer |
 
-`shortest_route` and `find_path` also show their search in the live viewer. Their output is unchanged.
+`shortest_route`, `find_path` and the trace tools also play their search in the live viewer at http://127.0.0.1:8765: first the graph is built edge by edge, then the search runs.
 
-Example client config:
+- Port: `SEMINAR2_LIVE_PORT` (default 8765). Off: `SEMINAR2_LIVE=0`.
+- If the default port is busy, the viewer picks a free one (ask `live_viewer` for the URL). A busy port set through `SEMINAR2_LIVE_PORT` disables the viewer; the server keeps working.
+- `uv run python -m seminar2.live --port N --no-browser` runs the viewer alone, without MCP.
+
+## Use with Claude Code
+
+The repo ships a project-scoped `.mcp.json`. Start `claude` in the repo root and it offers the `seminar2` server; approve it when prompted. Check it with `claude mcp list` or `/mcp` inside Claude Code. The tools appear as `mcp__seminar2__<tool>`, for example `mcp__seminar2__shortest_route`.
+
+To add the server for every project instead:
+
+```
+claude mcp add --scope user seminar2 -- uv run --project /path/to/AI_COURSE_UET python /path/to/AI_COURSE_UET/seminar2/mcp_server.py
+```
+
+### Other clients
+
+Generic MCP client config:
 
 ```json
 {
@@ -96,3 +120,16 @@ Example client config:
   }
 }
 ```
+
+Hermes: set `mcp_servers.seminar2` in `~/.hermes/config.yaml` to run `uv run --quiet --project <repo> python <repo>/seminar2/mcp_server.py`, then check it with `hermes mcp test seminar2`.
+
+## Development
+
+```
+uv run python -m unittest discover -s seminar2/tests -t .   # tests (stdlib unittest)
+uvx ruff@0.17.3 check .                                     # lint, config in pyproject.toml
+```
+
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs ruff and the tests on Ubuntu and Windows, on pushes to `main` and `development` and on pull requests.
+
+Branches: work on a feature branch and open a PR into `development`. `development` goes to `main` through a release PR.

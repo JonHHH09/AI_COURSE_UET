@@ -13,6 +13,7 @@ from seminar2 import animation
 from seminar2.cities.graph import load_graph
 from seminar2.graph_search import Graph
 from seminar2.layout import CITY_POS
+from seminar2.text import fold, printable
 
 OUT = Path(__file__).resolve().parent.parent / "images" / "cities" / "route.gif"
 DEFAULT_FROM, DEFAULT_TO = "Shkodër", "Korçë"
@@ -20,7 +21,7 @@ DEFAULT_FROM, DEFAULT_TO = "Shkodër", "Korçë"
 
 def resolve_city(name, cities):
     """Match a city ignoring case and accents; ValueError lists the valid names."""
-    matches = [c for c in cities if animation.fold(c) == animation.fold(name)]
+    matches = [c for c in cities if fold(c) == fold(name)]
     if not matches:
         raise ValueError(f"unknown city {name!r}; valid cities: {', '.join(cities)}")
     return matches[0]
@@ -52,7 +53,7 @@ def main(argv=None):
         print(f"error: {exc}", file=sys.stderr)
         return 2
     path, cost = Graph(graph, weighted=True).shortest_path(start, goal)
-    print(f"{' → '.join(path)}: {cost} km" if path else f"no route from {start} to {goal}")
+    print(printable(f"{' → '.join(path)}: {cost} km" if path else f"no route from {start} to {goal}"))
     scene = make_scene(graph, start, goal)
     if args.show:
         animation.show(scene, args.fps)
